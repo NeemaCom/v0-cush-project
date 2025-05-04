@@ -1,23 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DocumentUpload } from "@/components/document-upload"
 import { DocumentList } from "@/components/document-list"
 import type { Document } from "@/lib/documents"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/hooks/use-auth"
 
 export default function DocumentsPage() {
-  const { data: session } = useSession()
+  const { user } = useAuth()
   const { toast } = useToast()
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("all")
 
   const fetchDocuments = async () => {
-    if (!session?.user?.id) return
+    if (!user?.id) return
 
     try {
       setLoading(true)
@@ -40,10 +40,10 @@ export default function DocumentsPage() {
   }
 
   useEffect(() => {
-    if (session?.user?.id) {
+    if (user?.id) {
       fetchDocuments()
     }
-  }, [session?.user?.id])
+  }, [user?.id])
 
   const handleDocumentUploadSuccess = (documentId: string) => {
     toast({

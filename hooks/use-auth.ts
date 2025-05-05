@@ -1,27 +1,51 @@
 "use client"
 
 import { useSession } from "next-auth/react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 
-export function useAuth({ required = true } = {}) {
+interface UseAuthOptions {
+  required?: boolean
+  redirectTo?: string
+  role?: string | string[]
+}
+
+export function useAuth(options: UseAuthOptions = {}) {
+  const { required = false, redirectTo = "/login", role } = options
   const { data: session, status } = useSession()
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
-  const isLoading = status === "loading"
-  const isAuthenticated = !!session?.user
 
   useEffect(() => {
-    // If authentication is required and the user is not authenticated
-    if (required && !isLoading && !isAuthenticated) {
-      router.push("/login")
+    // Only run on the client side
+    if (typeof window === "undefined") return
+
+    if (status === "loading") {
+      setIsLoading(true)
+      return
     }
-  }, [required, isLoading, isAuthenticated, router])
+
+    if (required && !session) {
+      router.push(redirectTo)
+      return
+    }
+
+    if (role && session?.user) {
+      const userRole = session.user.role as string
+      const requiredRoles = Array.isArray(role) ? role : [role]
+
+      if (!requiredRoles.includes(userRole)) {
+        router.push("/dashboard")
+        return
+      }
+    }
+
+    setIsLoading(false)
+  }, [session, status, required, redirectTo, role, router])
 
   return {
-    session,
-    status,
-    isLoading,
-    isAuthenticated,
     user: session?.user,
+    isLoading: status === "loading" || isLoading,
+    isAuthenticated: !!session,
   }
 }

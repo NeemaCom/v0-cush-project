@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
       url: request.url,
       error,
       errorDescription,
-      headers: Object.fromEntries(request.headers),
     })
 
     // Map error codes to user-friendly messages
@@ -59,7 +58,7 @@ export async function GET(request: NextRequest) {
         timestamp: new Date().toISOString(),
       },
       {
-        status: 200, // Changed from 400 to 200 to ensure the response is properly received
+        status: 200, // Using 200 to ensure the response is properly received
         headers: {
           "Content-Type": "application/json",
         },
@@ -76,7 +75,7 @@ export async function GET(request: NextRequest) {
         timestamp: new Date().toISOString(),
       },
       {
-        status: 200, // Changed from 500 to 200 to ensure the response is properly received
+        status: 200, // Using 200 to ensure the response is properly received
         headers: {
           "Content-Type": "application/json",
         },

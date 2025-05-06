@@ -140,6 +140,7 @@ export async function registerUser(userData: {
       country: userData.country,
       phoneNumber: userData.phoneNumber,
       role: userData.role || "user",
+      emailVerified: false, // Add this field
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
       lastActiveAt: new Date().toISOString(),
@@ -153,10 +154,23 @@ export async function registerUser(userData: {
     await redis.set(userKey, userId)
 
     let emailSkipped = false
-    // Send welcome email (non-blocking)
+    // Send welcome email (non-blocking and optional)
     try {
       const emailResult = await sendWelcomeEmail(user.email, `${user.firstName} ${user.lastName}`)
       emailSkipped = !emailResult.success || !!emailResult.skipped
+
+      // Log the email result for debugging
+      if (emailSkipped) {
+        console.log("Welcome email skipped:", emailResult)
+      }
+
+      // Send verification email
+      try {
+        const { sendVerificationEmail } = require("./verification")
+        await sendVerificationEmail(userId, user.email, `${user.firstName} ${user.lastName}`)
+      } catch (verificationError) {
+        console.error("Failed to send verification email:", verificationError)
+      }
     } catch (error) {
       console.error("Failed to send welcome email:", error)
       emailSkipped = true
@@ -169,6 +183,7 @@ export async function registerUser(userData: {
       firstName: userData.firstName,
       lastName: userData.lastName,
       role: user.role,
+      emailVerified: false,
       emailSkipped,
     }
   } catch (error) {
@@ -347,5 +362,38 @@ export async function getUserActivities(userId: string, limit = 10) {
   } catch (error) {
     console.error("Error getting user activities:", error)
     return []
+  }
+}
+
+// Update user by ID
+export async function updateUserById(id: string, updates: Partial<Omit<any, "id" | "password">>) {
+  try {
+    const userKey = `user:${id}`
+    const user = await redis.get(userKey)
+
+    if (!user) {
+      throw new Error("User not found")
+    }
+
+    const parsedUser = JSON.parse(user as string)
+    const updatedUser = { ...parsedUser, ...updates }
+
+    await redis.set(userKey, JSON.stringify(updatedUser))
+
+    return updatedUser
+  } catch (error) {
+    console.error("Error updating user:", error)
+    throw error
+  }
+}
+
+// Check if email is verified
+export async function isEmailVerified(userId: string): Promise<boolean> {
+  try {
+    const user = await getUserById(userId)
+    return user?.emailVerified === true
+  } catch (error) {
+    console.error("Error checking email verification:", error)
+    return false
   }
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -25,11 +25,23 @@ export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams?.get("callbackUrl") || "/dashboard"
-  const error = searchParams?.get("error")
+  const errorParam = searchParams?.get("error")
 
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(error || null)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (errorParam) {
+      switch (errorParam) {
+        case "CredentialsSignin":
+          setFormError("Invalid email or password. Please try again.")
+          break
+        default:
+          setFormError(`Authentication error: ${errorParam}`)
+      }
+    }
+  }, [errorParam])
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -48,7 +60,6 @@ export default function LoginPage() {
         redirect: false,
         email: values.email,
         password: values.password,
-        callbackUrl,
       })
 
       if (!result?.error) {
@@ -57,6 +68,7 @@ export default function LoginPage() {
         setFormError("Invalid email or password. Please try again.")
       }
     } catch (error) {
+      console.error("Sign in error:", error)
       setFormError("An unexpected error occurred. Please try again.")
     } finally {
       setIsSubmitting(false)
@@ -191,7 +203,7 @@ export default function LoginPage() {
                 </div>
               </Card>
 
-              {/* New Flight Booking Service */}
+              {/* Flight Booking Service */}
               <Card className="p-4 hover:shadow-md transition-shadow">
                 <div className="flex items-center space-x-4">
                   <div className="bg-primary/10 p-3 rounded-full">

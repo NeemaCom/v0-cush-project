@@ -77,126 +77,213 @@ const defaultTemplates: Omit<EmailTemplate, "id" | "createdAt" | "updatedAt">[] 
   },
 ]
 
-// Initialize templates in the database
-export async function initializeEmailTemplates() {
-  const supabase = createClient()
-
-  for (const template of defaultTemplates) {
-    // Check if template exists
-    const { data: existingTemplate } = await supabase
+// Get template by name with fallback to in-memory templates
+export async function getTemplateByName(name: string): Promise<EmailTemplate | null> {
+  try {
+    const supabase = createClient()
+    const { data, error } = await supabase
       .from("email_templates")
       .select("*")
-      .eq("name", template.name)
-      .eq("isDefault", true)
+      .eq("name", name)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single()
 
-    if (!existingTemplate) {
-      // Insert template if it doesn't exist
-      await supabase.from("email_templates").insert({
-        ...template,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+    if (error) {
+      console.warn(`Error fetching email template '${name}' from database:`, error)
+      // If there's a database error, fall back to in-memory templates
+      return getInMemoryTemplate(name)
     }
+
+    if (!data) {
+      console.warn(`Email template '${name}' not found in database, using fallback`)
+      return getInMemoryTemplate(name)
+    }
+
+    return mapDatabaseTemplateToSchema(data)
+  } catch (error) {
+    console.warn(`Exception fetching email template '${name}':`, error)
+    // If there's any other error, fall back to in-memory templates
+    return getInMemoryTemplate(name)
+  }
+}
+
+// Get template from in-memory defaults
+function getInMemoryTemplate(name: string): EmailTemplate | null {
+  const template = defaultTemplates.find((t) => t.name === name)
+
+  if (!template) {
+    console.warn(`No fallback template found for '${name}'`)
+    return null
+  }
+
+  return {
+    ...template,
+    id: `fallback-${name}`,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+}
+
+// Initialize templates in the database
+export async function initializeEmailTemplates() {
+  try {
+    const supabase = createClient()
+
+    // First check if the table exists by trying to query it
+    const { error: tableCheckError } = await supabase.from("email_templates").select("id").limit(1)
+
+    // If we get a specific error about relation not existing, the table doesn't exist
+    if (
+      tableCheckError &&
+      tableCheckError.message.includes("relation") &&
+      tableCheckError.message.includes("does not exist")
+    ) {
+      console.warn("email_templates table does not exist. Templates will use in-memory fallbacks.")
+      return
+    }
+
+    for (const template of defaultTemplates) {
+      // Check if template exists
+      const { data: existingTemplate, error: checkError } = await supabase
+        .from("email_templates")
+        .select("id")
+        .eq("name", template.name)
+        .eq("isDefault", true)
+        .single()
+
+      if (checkError && !checkError.message.includes("No rows found")) {
+        console.error(`Error checking for template '${template.name}':`, checkError)
+        continue
+      }
+
+      if (!existingTemplate) {
+        // Insert template if it doesn't exist
+        const { error: insertError } = await supabase.from("email_templates").insert({
+          ...template,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+
+        if (insertError) {
+          console.error(`Error inserting template '${template.name}':`, insertError)
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error initializing email templates:", error)
   }
 }
 
 // Get all templates
 export async function getAllTemplates(): Promise<EmailTemplate[]> {
-  const supabase = createClient()
-  const { data, error } = await supabase.from("email_templates").select("*").order("name")
+  try {
+    const supabase = createClient()
+    const { data, error } = await supabase.from("email_templates").select("*").order("name")
 
-  if (error) {
-    console.error("Error fetching email templates:", error)
-    return []
+    if (error) {
+      console.warn("Error fetching email templates from database:", error)
+      // If there's a database error, fall back to in-memory templates
+      return defaultTemplates.map((template) => ({
+        ...template,
+        id: `fallback-${template.name}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }))
+    }
+
+    return data.map(mapDatabaseTemplateToSchema)
+  } catch (error) {
+    console.warn("Exception fetching email templates:", error)
+    // If there's any other error, fall back to in-memory templates
+    return defaultTemplates.map((template) => ({
+      ...template,
+      id: `fallback-${template.name}`,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }))
   }
-
-  return data.map(mapDatabaseTemplateToSchema)
-}
-
-// Get template by name
-export async function getTemplateByName(name: string): Promise<EmailTemplate | null> {
-  const supabase = createClient()
-  const { data, error } = await supabase
-    .from("email_templates")
-    .select("*")
-    .eq("name", name)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single()
-
-  if (error || !data) {
-    console.error(`Error fetching email template '${name}':`, error)
-    return null
-  }
-
-  return mapDatabaseTemplateToSchema(data)
 }
 
 // Create or update template
 export async function saveTemplate(template: EmailTemplate): Promise<EmailTemplate | null> {
-  const supabase = createClient()
+  try {
+    const supabase = createClient()
 
-  // If template has an ID, update it
-  if (template.id) {
-    const { data, error } = await supabase
-      .from("email_templates")
-      .update({
-        name: template.name,
-        subject: template.subject,
-        description: template.description,
-        html: template.html,
-        variables: template.variables,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", template.id)
-      .select()
-      .single()
+    // If template has an ID, update it
+    if (template.id && !template.id.startsWith("fallback-")) {
+      const { data, error } = await supabase
+        .from("email_templates")
+        .update({
+          name: template.name,
+          subject: template.subject,
+          description: template.description,
+          html: template.html,
+          variables: template.variables,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", template.id)
+        .select()
+        .single()
 
-    if (error) {
-      console.error("Error updating email template:", error)
-      return null
+      if (error) {
+        console.error("Error updating email template:", error)
+        return null
+      }
+
+      return mapDatabaseTemplateToSchema(data)
     }
+    // Otherwise create a new one
+    else {
+      const { data, error } = await supabase
+        .from("email_templates")
+        .insert({
+          name: template.name,
+          subject: template.subject,
+          description: template.description,
+          html: template.html,
+          variables: template.variables,
+          isDefault: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
 
-    return mapDatabaseTemplateToSchema(data)
-  }
-  // Otherwise create a new one
-  else {
-    const { data, error } = await supabase
-      .from("email_templates")
-      .insert({
-        name: template.name,
-        subject: template.subject,
-        description: template.description,
-        html: template.html,
-        variables: template.variables,
-        isDefault: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
+      if (error) {
+        console.error("Error creating email template:", error)
+        return null
+      }
 
-    if (error) {
-      console.error("Error creating email template:", error)
-      return null
+      return mapDatabaseTemplateToSchema(data)
     }
-
-    return mapDatabaseTemplateToSchema(data)
+  } catch (error) {
+    console.error("Exception saving email template:", error)
+    return null
   }
 }
 
 // Delete template
 export async function deleteTemplate(id: string): Promise<boolean> {
-  const supabase = createClient()
-  const { error } = await supabase.from("email_templates").delete().eq("id", id).eq("isDefault", false) // Only allow deletion of non-default templates
+  try {
+    // Don't attempt to delete fallback templates
+    if (id.startsWith("fallback-")) {
+      return false
+    }
 
-  if (error) {
-    console.error("Error deleting email template:", error)
+    const supabase = createClient()
+    const { error } = await supabase.from("email_templates").delete().eq("id", id).eq("isDefault", false) // Only allow deletion of non-default templates
+
+    if (error) {
+      console.error("Error deleting email template:", error)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.error("Exception deleting email template:", error)
     return false
   }
-
-  return true
 }
 
 // Helper function to map database fields to schema

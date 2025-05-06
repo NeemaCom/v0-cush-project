@@ -60,10 +60,10 @@
     "zod": "latest",
     "@auth/core": "latest",
     "nodemailer": "latest",
-    "@supabase/supabase-js": "latest",
     "@tiptap/core": "latest",
     "@tiptap/pm": "latest",
     "@tiptap/extension-text-style": "latest",
+    "@supabase/supabase-js": "latest",
     "stripe": "latest",
     "uuid": "latest",
     "next-auth": "latest",
@@ -74,7 +74,6 @@
     "socket.io-client": "latest",
     "@upstash/redis": "latest",
     "bcryptjs": "latest",
-    "@supabase/auth-helpers-nextjs": "latest",
     "ai": "latest",
     "@ai-sdk/openai": "latest",
     "@tiptap/react": "latest",
@@ -84,7 +83,9 @@
     "@tiptap/extension-text-align": "latest",
     "@tiptap/extension-image": "latest",
     "@tiptap/extension-color": "latest",
-    "resend": "latest"
+    "@supabase/auth-helpers-nextjs": "latest",
+    "resend": "latest",
+    "readline": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

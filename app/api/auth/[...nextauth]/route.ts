@@ -23,12 +23,14 @@ export const handler = NextAuth({
           const userId = await redis.get(userKey)
 
           if (!userId) {
+            console.log(`User not found for email: ${credentials.email}`)
             return null
           }
 
           const user = await redis.get(`user:${userId}`)
 
           if (!user) {
+            console.log(`User data not found for ID: ${userId}`)
             return null
           }
 
@@ -38,7 +40,21 @@ export const handler = NextAuth({
           const passwordMatch = await compare(credentials.password, parsedUser.password)
 
           if (!passwordMatch) {
+            console.log(`Password mismatch for user: ${parsedUser.id}`)
             return null
+          }
+
+          // Check if email is verified
+          if (!parsedUser.emailVerified) {
+            // Instead of returning null, we'll return the user with a special flag
+            // This allows us to handle unverified users in the callbacks
+            return {
+              id: parsedUser.id,
+              name: `${parsedUser.firstName} ${parsedUser.lastName}`,
+              email: parsedUser.email,
+              role: parsedUser.role || "user",
+              emailVerified: false,
+            }
           }
 
           return {
@@ -46,6 +62,7 @@ export const handler = NextAuth({
             name: `${parsedUser.firstName} ${parsedUser.lastName}`,
             email: parsedUser.email,
             role: parsedUser.role || "user",
+            emailVerified: true,
           }
         } catch (error) {
           console.error("Auth error:", error)
@@ -56,13 +73,14 @@ export const handler = NextAuth({
   ],
   pages: {
     signIn: "/login",
-    error: "/login", // Redirect to login page with error
+    error: "/auth/error", // Change to a proper error page
   },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
         token.role = user.role
+        token.emailVerified = user.emailVerified
       }
       return token
     },
@@ -70,13 +88,23 @@ export const handler = NextAuth({
       if (token && session.user) {
         session.user.id = token.id as string
         session.user.role = token.role as string
+        session.user.emailVerified = token.emailVerified as boolean
       }
       return session
+    },
+    async signIn({ user }) {
+      // If the user's email is not verified, redirect to a verification page
+      if (user && user.emailVerified === false) {
+        return `/unverified-email?email=${encodeURIComponent(user.email as string)}`
+      }
+      return true
     },
   },
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
+  debug: process.env.NODE_ENV === "development",
 })
 
 export { handler as GET, handler as POST }

@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { compare, hash } from "bcryptjs"
 import { redis } from "./redis"
 import { sendWelcomeEmail } from "./email"
+import type { NextRequest } from "next/server"
 
 export type UserRole = "user" | "admin" | "support"
 
@@ -396,4 +397,10 @@ export async function isEmailVerified(userId: string): Promise<boolean> {
     console.error("Error checking email verification:", error)
     return false
   }
+}
+
+// Update to not use next/headers directly
+export async function getServerSession(req?: NextRequest) {
+  // Use req?.cookies instead of cookies()
+  // Rest of your function...
 }

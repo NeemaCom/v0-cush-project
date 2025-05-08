@@ -1,92 +1,50 @@
-import { type NextRequest, NextResponse } from "next/server"
-
 /**
- * Handles authentication error requests
- * @param request The incoming request
- * @returns A JSON response with error details
+ * Simplified auth error handler
  */
-export async function GET(request: NextRequest) {
-  try {
-    // Get error from query parameters
-    const url = new URL(request.url)
-    const error = url.searchParams.get("error") || "unknown"
-    const errorDescription = url.searchParams.get("error_description") || "No additional details available"
+export async function GET(request: Request) {
+  // Get error from query parameters
+  const url = new URL(request.url)
+  const error = url.searchParams.get("error") || "unknown"
 
-    // Log the full request for debugging
-    console.log("Auth error request:", {
-      url: request.url,
-      error,
-      errorDescription,
-    })
+  // Basic error message
+  const message = "Authentication error: " + error
 
-    // Map error codes to user-friendly messages
-    let message = "An authentication error occurred"
-    switch (error) {
-      case "Configuration":
-        message = "There is a problem with the server configuration."
-        break
-      case "AccessDenied":
-        message = "You do not have permission to sign in."
-        break
-      case "Verification":
-        message = "The verification link is invalid or has expired."
-        break
-      case "OAuthSignin":
-      case "OAuthCallback":
-      case "OAuthCreateAccount":
-      case "EmailCreateAccount":
-      case "Callback":
-      case "OAuthAccountNotLinked":
-      case "EmailSignin":
-      case "CredentialsSignin":
-        message = "There was a problem with your sign-in attempt. Please try again."
-        break
-      case "SessionRequired":
-        message = "You must be signed in to access this page."
-        break
-      default:
-        message = "An unexpected authentication error occurred."
-    }
+  // Simple HTML response
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Auth Error</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 2rem; max-width: 600px; margin: 0 auto; }
+          .error-box { border: 1px solid #f56565; background-color: #fff5f5; padding: 1rem; border-radius: 0.25rem; }
+          h1 { color: #2d3748; }
+        </style>
+      </head>
+      <body>
+        <h1>Authentication Error</h1>
+        <div class="error-box">
+          <p>${message}</p>
+        </div>
+        <p><a href="/login">Return to login</a></p>
+      </body>
+    </html>
+  `
 
-    // Return a JSON response with detailed error information
-    return NextResponse.json(
-      {
-        status: "error",
-        error: error,
-        message: message,
-        description: errorDescription,
-        timestamp: new Date().toISOString(),
-      },
-      {
-        status: 200, // Using 200 to ensure the response is properly received
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    )
-  } catch (err) {
-    // Handle any unexpected errors in the route itself
-    console.error("Error in auth error route:", err)
-    return NextResponse.json(
-      {
-        status: "error",
-        error: "internal_server_error",
-        message: "An internal server error occurred while processing the authentication error",
-        timestamp: new Date().toISOString(),
-      },
-      {
-        status: 200, // Using 200 to ensure the response is properly received
-        headers: {
-          "Content-Type": "application/json",
-        },
-      },
-    )
-  }
+  // Return simple HTML response
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+    },
+  })
 }
 
 /**
- * Handle POST requests by redirecting to GET handler
+ * Handle POST requests
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   return GET(request)
 }
